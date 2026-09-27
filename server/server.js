@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { generateStudySet, generateStudySetStream, refineStudySet } from './generate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -89,6 +89,10 @@ function handleError(res, err) {
   const [status, message] = map[err.message] || [502, 'GENERATION_FAILED'];
   return res.status(status).json({ success: false, error: message });
 }
+
+// ─── Serve the built frontend (production) ─────────────────────────────────────
+app.use(express.static(path.join(__dirname, '../dist')));
+app.get('*', (_req, res) => res.sendFile(path.join(__dirname, '../dist/index.html')));
 
 app.listen(PORT, () => {
   console.log(`StudyFlow server running on http://localhost:${PORT}`);

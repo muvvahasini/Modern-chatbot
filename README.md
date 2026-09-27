@@ -35,49 +35,57 @@ StudyFlow is **not a chatbot**. It sends your input to an LLM through a secure b
 ## Architecture
 
 ```
-React (frontend/)
+React (src/)
     ↓ POST /api/generate  (non-streaming) or /api/generate/stream (SSE)
-Express backend (backend/)
+Express backend (server/)
     ↓ structured prompt
 OpenRouter API
     ↓ JSON response
-backend/generate.js parses & normalizes
+server/generate.js parses & normalizes
     ↓
-frontend/lib/validateResult.js (defensive shape check)
+src/lib/validateResult.js (defensive shape check)
     ↓
 Interactive study UI  (blocks, quiz, refinement, sessions)
 ```
 
-The API key and model live in `backend/.env` only. The browser never sees them.
+The API key and model live in `.env` (server-side) only. The browser never sees them —
+`src/lib/api.js` is the only code that talks to the backend, and it only calls `/api/*`.
 
 ## Project Structure
 
 ```
 flam/
-├── frontend/          # React + Vite app
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── StudySetView.jsx      # block grid + header + refinement
-│   │   │   ├── StudyMode.jsx         # quiz: flip / mark / results / retest
-│   │   │   ├── SessionsPanel.jsx
-│   │   │   └── blocks/
-│   │   │       ├── BlockRenderer.jsx
-│   │   │       ├── FlashcardBlock.jsx
-│   │   │       ├── ChecklistBlock.jsx
-│   │   │       └── StatBlock.jsx
-│   │   ├── lib/
-│   │   │   ├── api.js                # only place the frontend calls the backend
-│   │   │   ├── sessions.js
-│   │   │   └── validateResult.js     # shape-check before rendering
-│   │   ├── App.jsx
-│   │   └── index.css
-│   └── vite.config.js  (proxies /api -> backend:3001)
-├── backend/           # Express API proxy
-│   ├── server.js
-│   └── generate.js     # OpenRouter call + streaming + system prompts
-├── .env.example
-└── package.json        # npm start | npm run dev | npm run build
+├── index.html                  # root entry point
+├── vite.config.js              # dev proxy: /api -> localhost:3001
+├── src/                        # React + Vite frontend source
+│   ├── App.jsx                 # 6 views: LANDING / INPUT / LOADING / STUDY / QUIZ / ERROR
+│   ├── main.jsx
+│   ├── index.css
+│   ├── components/
+│   │   ├── StudySetView.jsx    # block grid + header (save / refine / start quiz)
+│   │   ├── StudyMode.jsx       # quiz: type → submit → tap-to-reveal → evaluate → grade, retest wrong
+│   │   ├── SessionsPanel.jsx
+│   │   └── blocks/
+│   │       ├── BlockRenderer.jsx
+│   │       ├── FlashcardBlock.jsx
+│   │       ├── ChecklistBlock.jsx
+│   │       └── StatBlock.jsx
+│   ├── lib/
+│   │   ├── api.js              # the ONLY place the frontend calls the backend (/api/*)
+│   │   ├── sessions.js         # localStorage save / load
+│   │   └── validateResult.js   # shape-check before any rendering
+│   └── types/
+│       └── result.js           # documents the JSON shape the AI must return
+├── server/                     # Express backend — holds the API key
+│   ├── server.js               # routes + serves the built /dist in production
+│   └── generate.js             # OpenRouter call, SSE streaming, system prompts
+├── package.json                # npm run dev | npm run build | npm start
+├── railway.json                # deploy config (build + start commands)
+├── .env.example                # OPENROUTER_API_KEY, OPENROUTER_MODEL, PORT
+└── README.md
 ```
+
+A single root `package.json` holds every dependency. The frontend and backend are not separate packages.
 
 ## Setup
 
@@ -92,17 +100,17 @@ flam/
 npm install
 ```
 
-This installs the root tooling and, via `postinstall`, the `frontend/` and `backend/` dependencies.
+This installs everything at the root — the Express backend (`express`/`cors`/`dotenv`) and the React/Vite frontend (`react`/`vite`/`@vitejs/plugin-react`).
 
 ### Environment Variables
 
-The key never leaves the backend:
+The key never leaves `server/`. The backend reads `process.env.OPENROUTER_API_KEY`, so it is never shipped to the browser.
 
 ```bash
-cp backend/.env.example backend/.env
+cp .env.example .env
 ```
 
-Edit `backend/.env`:
+Edit `.env`:
 
 ```
 OPENROUTER_API_KEY=sk-or-v1-…your…key…
@@ -110,15 +118,36 @@ OPENROUTER_MODEL=google/gemma-2-9b-it:free   # optional, any OpenRouter model
 PORT=3001                                     # optional
 ```
 
-### Run
+### Run (development)
 
 ```bash
-npm start
+npm run dev
 ```
 
-This starts the Express backend (port `3001`) and the Vite dev server (port `5173`). Open [http://localhost:5173](http://localhost:5173).
+This starts the Express backend (port `3001`) and the Vite dev server (port `5173`). Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` to the backend, so no CORS issues in dev.
 
-For development, `npm run dev` works the same way.
+### Run (production, locally)
+
+```bash
+npm run build && npm start
+```
+
+`npm run build` produces `dist/` (static frontend); `npm start` runs the Express server, which serves `/dist` and the `/api` routes on a single port (`3001`).
+
+### Deploy
+
+The app is a single Node service (Express serves both the API and the built frontend), ready to deploy anywhere Node runs.
+
+**Railway (recommended)** — `railway.json` is included so a push auto-builds.
+
+1. Install the CLI: `npm i -g railway && railway login` (browser auth — done in your browser).
+2. Create a project: `railway init` (picks this repo, or link an existing one).
+3. Set the secret: in the Railway dashboard, add `OPENROUTER_API_KEY` as a project environment variable (and optionally `OPENROUTER_MODEL` and `PORT`).
+4. Deploy: `railway up --service web` (builds via `npm run build`, then runs `npm start`).
+
+`railway.json` wires `build.command = npm run build` and `run.command = npm start`. No `.env` file is needed in the cloud — Railway injects the key from its environment, and `server.js` reads `process.env.OPENROUTER_API_KEY`.
+
+> Note: I prepared and verified the entire deploy configuration (build + static serving + SPA fallback + `/api/health`) in this environment, but I can't complete the final `railway up` push here because the Railway CLI isn't logged in. After `railway login` in your account, the single command above deploys it.
 
 ## Usage
 
