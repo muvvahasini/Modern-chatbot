@@ -134,20 +134,6 @@ npm run build && npm start
 
 `npm run build` produces `dist/` (static frontend); `npm start` runs the Express server, which serves `/dist` and the `/api` routes on a single port (`3001`).
 
-### Deploy
-
-The app is a single Node service (Express serves both the API and the built frontend), ready to deploy anywhere Node runs.
-
-**Railway (recommended)** — `railway.json` is included so a push auto-builds.
-
-1. Install the CLI: `npm i -g railway && railway login` (browser auth — done in your browser).
-2. Create a project: `railway init` (picks this repo, or link an existing one).
-3. Set the secret: in the Railway dashboard, add `OPENROUTER_API_KEY` as a project environment variable (and optionally `OPENROUTER_MODEL` and `PORT`).
-4. Deploy: `railway up --service web` (builds via `npm run build`, then runs `npm start`).
-
-`railway.json` wires `build.command = npm run build` and `run.command = npm start`. No `.env` file is needed in the cloud — Railway injects the key from its environment, and `server.js` reads `process.env.OPENROUTER_API_KEY`.
-
-> Note: I prepared and verified the entire deploy configuration (build + static serving + SPA fallback + `/api/health`) in this environment, but I can't complete the final `railway up` push here because the Railway CLI isn't logged in. After `railway login` in your account, the single command above deploys it.
 
 ## Usage
 
